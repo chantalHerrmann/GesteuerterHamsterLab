@@ -4,4 +4,16 @@ public class HamsterUser extends Receiver {
         super(name);
     }
 
+    public void vor() {
+        execute("msg" + getName() + "vor");
+    }
+
+    public void linksUm() {
+        execute("msg" + getName() + "linksUm");
+    }
+
+    public void nimm() {
+        execute("msg" + getName() + "nimm");
+    }
+
 }

@@ -7,6 +7,7 @@ import java.util.Objects;
 public class CommandHandler {
 
     private final BasicTHMChatServer s; //create BasicTHMChat s (will be initialized in the constructor)
+    private Suche suche;
     private String user, pwd; //create credential vars
     private final ArrayList<Broadcast> broadcasts = new ArrayList<>(); //initialize an arraylist for broadcasts (empty)
     int lastMsg = 0; //initialize counter for message IDs with 0
@@ -19,6 +20,162 @@ public class CommandHandler {
         s = server; //initialize s
     }
 
+    /*
+     * if neither a broadcast nor a user shares the specified name, create a broadcast and print information
+     * otherwise print warnings
+     * */
+    public void bcCase() {
+        if (!isBroadcast(args.get(0))) {
+            if (!isUser(args.get(0))) {
+                broadcasts.add(new Broadcast(args.get(0)));
+                InfoCodes.BROADCAST_CREATED.print(args.get(0));
+            } else { InfoCodes.ILLEGAL_NAME.print(args.get(0)); }
+        } else { InfoCodes.EXISTS.print(args.get(0)); }
+    }
+    public void bcaddCase() {
+        Broadcast bc = getBroadcast(args.get(0)); //select broadcast by specified name from broadcast arraylist (null if it doesn't exist)
+
+        if (isUser(args.get(1)) && isBroadcast(args.get(0)) && bc.getUsers().stream().noneMatch(
+                u -> u.getName().equals(args.get(1)))) { //if specified user and broadcast exist and user is not member of broadcast
+            bc.add(new User(args.get(1))); //add user to broadcast and
+            InfoCodes.ADDED.print(args.get(1), args.get(0)); //print info
+        } else { //otherwise print warning
+            if (!isUser(args.get(1))) { InfoCodes.USER_NOT_FOUND.print(args.get(1)); }
+            else if(!isBroadcast(args.get(0))) { InfoCodes.BROADCAST_NOT_FOUND.print(args.get(0)); }
+            else { InfoCodes.ALREADY_MEMBER.print(args.get(1), args.get(0)); }
+        }
+    }
+    public void bcremCase() {
+        Broadcast bc = getBroadcast(args.get(0)); //select broadcast by specified name from broadcast arraylist (null it doesn't exist)
+        if (bc != null && bc.getUsers().stream().anyMatch(u -> u.getName().equals(args.get(1)))) { //if specified user and broadcast exist
+            bc.rem(args.get(1)); //remove user from broadcast and
+            InfoCodes.REMOVED.print(args.get(1), args.get(0)); //print info
+        }
+        //otherwise print warning
+        else if (bc == null) { InfoCodes.BROADCAST_NOT_FOUND.print(args.get(0)); }
+        else { InfoCodes.NOT_A_MEMBER.print(args.get(1), args.get(0)); }
+    }
+    public void bcdelCase() {
+        Broadcast bc = getBroadcast(args.get(0)); //select broadcast by specified name from broadcast arraylist (null if it doesn't exist)
+        if (bc == null){ //if broadcast doesn't exist
+            InfoCodes.NOT_FOUND.print(args.get(0)); //print warning
+        } else { //if it exists
+            bc.clear();
+            broadcasts.removeIf(broadcast -> broadcast == bc); //delete it and
+            InfoCodes.DELETED.print(args.get(0)); //print info
+        }
+    }
+    public void imgCase() {
+        Broadcast bc = getBroadcast(args.get(0)); //select broadcast by specified receiver name from broadcast arraylist (null if it doesn't exist)
+        String u = getUser(args.get(0)); //select user by specified receiver name (null if it doesn't exist)
+        /*
+         * if neither a broadcast nor a user shares the specified name of the receiver, print warning
+         * otherwise send message and refresh, so it gets displayed (automatically displays 100 most recent)
+         * */
+        if (bc==null  && u==null) { InfoCodes.NOT_FOUND.print(args.get(0)); }
+        else if (bc!=null && bc.getUsers().size()==0) {
+            InfoCodes.EMPTY.print(args.get(0));
+            break;
+        } else {
+            ImageMsg msg = new ImageMsg(s, bc==null ? new User(u) : bc, user, pwd, args.get(1));
+            msg.send();
+        }
+        execute("refresh");
+    }
+    public void msgCase() {
+        Broadcast bc = getBroadcast(args.get(0)); //select broadcast by specified receiver name from broadcast arraylist (null if it doesn't exist)
+        String u = getUser(args.get(0)); //select user by specified receiver name (null if it doesn't exist)
+        /*
+         * if neither a broadcast nor a user shares the specified name of the receiver, print warning
+         * otherwise send message and refresh, so it gets displayed (automatically displays 100 most recent)
+         * */
+        if (bc==null && u==null) {
+            InfoCodes.NOT_FOUND.print(args.get(0));
+            break;
+        }
+        else if (bc!=null && bc.getUsers().size()==0){
+            InfoCodes.EMPTY.print(args.get(0));
+            break;
+        } else {
+            TextMsg msg = new TextMsg(s, bc==null ? new User(u) : bc, user, pwd, args.get(1));
+            msg.send();
+        }
+        execute("refresh");
+    }
+    public void leCase() {
+        //either get 100 most recent or all messages depending on argument and save in string array 'messages'
+        String[] messages = (args.size() != 0 && args.get(0).equals("100")) ? s.getMostRecentMessages(user, pwd) : s.getMessages(user, pwd, 0);
+        //iterate through 'messages' and print each
+        for (String message : messages) {
+            printMsg(message);
+        }
+        //update message counter
+        lastMsg = Integer.parseInt(messages[messages.length-1].substring(0, 4));
+    }
+    public String refreshCase() {
+        //if no messages are displayed yet, show the 100 most recent
+        if (lastMsg == 0) { execute("le 100"); }
+        //get all new and save in string array 'messages'
+        String[] messages = s.getMessages(user, pwd, lastMsg);
+        //iterate through 'messages', print each and update message counter
+        for (String message : messages) {
+            printMsg(message);
+            lastMsg++;
+        }
+        return message; //return Statement only used in case of labyrinth
+    }
+    public void labryinthCase() {
+        String u = getUser(args.get(0)); //select HamsterUser by specified receiver name (null if it doesn't exist)
+        //umgang und weitergeben der antowrt vom hamster hier zu bearbeiten, mit refresh schauen, nach nachricht von Hamster und werte nehmen
+        String details = refreshCase();
+        int maxCol = string.charAt(0);
+        int maxRow = string.charAt(1);
+        int[][] map = new int[maxCol][maxRow];
+        int colCounter = 0;
+        int col = 0;
+        int row = 0;
+        int targetRow;
+        int targetCol;
+        for (int i = 2; i < (maxRow*maxCol); i ++) {
+            if (colCounter > maxCol) { //if end of row reached
+                row++;
+                col = 0;
+            }
+            if (string.charAt(i).equals("0")) {
+                map[col][row] = 0;
+            }
+            if (string.charAt(i).equals("!")) {
+                map[col][row] = 0;
+                targetRow = row;
+                targetCol = col;
+            }
+            if (string.charAt(i).equals("x")) {
+                map[col][row] = -1;
+            }
+            col++;
+        }
+        suche = new Suche(u, maxCol, maxRow, map[][], targetCol, targetRow); //starts searching way of the hamster
+        suche.suchePfad();
+    }
+    public void helpCase() {
+        //TO-DO: add le again
+        System.out.println(ANSIColors.YELLOW.get());
+        System.out.println("Command usage and meaning:");
+        System.out.println("user [username]: set username");
+        System.out.println("pwd [password]: set password");
+        System.out.println("list: shows a list of all users in this chat");
+        System.out.println("le (100): shows all messages (optional: the 100 most recent)");
+        System.out.println("bc [name]: creates a broadcast");
+        System.out.println("bcadd [name] [username]: adds user to broadcast");
+        System.out.println("bcrem [name] [username]: removes user from broadcast");
+        System.out.println("bcdel [broadcast]: deletes broadcast");
+        System.out.println("msg [username/broadcast] [message]: sends text message to user or broadcast");
+        System.out.println("img [username/broadcast] [path_to_file]: sends an image to user or broadcast");
+        System.out.println("refresh: shows new messages");
+        System.out.println("labyrinth [usernameOfHamster]: starts interacting with the Hamster user and solves labyrinth");
+        System.out.println("exit: exits the chat");
+        System.out.println(ANSIColors.RESET.get());
+    }
     //method for executing commands
      public void execute(String command) throws IOException { //but practically it doesn't because we check the credentials at line 52
         if (command.isEmpty() || command.isBlank()){ return; } //return if line is empty or blank
@@ -80,135 +237,38 @@ public class CommandHandler {
                 System.out.println(); //an empty line for separation
             }
             case "bc" -> {
-                /*
-                * if neither a broadcast nor a user shares the specified name, create a broadcast and print information
-                * otherwise print warnings
-                * */
-
-
-                if (!isBroadcast(args.get(0))) {
-                    if (!isUser(args.get(0))) {
-                        broadcasts.add(new Broadcast(args.get(0)));
-                        InfoCodes.BROADCAST_CREATED.print(args.get(0));
-                    } else { InfoCodes.ILLEGAL_NAME.print(args.get(0)); }
-                } else { InfoCodes.EXISTS.print(args.get(0)); }
+                bcCase();
             }
             case "bcadd" -> {
-                Broadcast bc = getBroadcast(args.get(0)); //select broadcast by specified name from broadcast arraylist (null if it doesn't exist)
-
-                if (isUser(args.get(1)) && isBroadcast(args.get(0)) && bc.getUsers().stream().noneMatch(
-                        u -> u.getName().equals(args.get(1)))) { //if specified user and broadcast exist and user is not member of broadcast
-                    bc.add(new User(args.get(1))); //add user to broadcast and
-                    InfoCodes.ADDED.print(args.get(1), args.get(0)); //print info
-                } else { //otherwise print warning
-                    if (!isUser(args.get(1))) { InfoCodes.USER_NOT_FOUND.print(args.get(1)); }
-                    else if(!isBroadcast(args.get(0))) { InfoCodes.BROADCAST_NOT_FOUND.print(args.get(0)); }
-                    else { InfoCodes.ALREADY_MEMBER.print(args.get(1), args.get(0)); }
-                }
+                bcaddCase();
             }
             case "bcrem" -> {
-                Broadcast bc = getBroadcast(args.get(0)); //select broadcast by specified name from broadcast arraylist (null it doesn't exist)
-                if (bc != null && bc.getUsers().stream().anyMatch(u -> u.getName().equals(args.get(1)))) { //if specified user and broadcast exist
-                    bc.rem(args.get(1)); //remove user from broadcast and
-                    InfoCodes.REMOVED.print(args.get(1), args.get(0)); //print info
-                }
-                //otherwise print warning
-                else if (bc == null) { InfoCodes.BROADCAST_NOT_FOUND.print(args.get(0)); }
-                else { InfoCodes.NOT_A_MEMBER.print(args.get(1), args.get(0)); }
+                bcremCase();
             }
             case "bcdel" -> {
-                Broadcast bc = getBroadcast(args.get(0)); //select broadcast by specified name from broadcast arraylist (null if it doesn't exist)
-                if (bc == null){ //if broadcast doesn't exist
-                    InfoCodes.NOT_FOUND.print(args.get(0)); //print warning
-                } else { //if it exists
-                    bc.clear();
-                    broadcasts.removeIf(broadcast -> broadcast == bc); //delete it and
-                    InfoCodes.DELETED.print(args.get(0)); //print info
-                }
+                bcdelCase();
             }
             case "msg" -> {
-                Broadcast bc = getBroadcast(args.get(0)); //select broadcast by specified receiver name from broadcast arraylist (null if it doesn't exist)
-                String u = getUser(args.get(0)); //select user by specified receiver name (null if it doesn't exist)
-                /*
-                * if neither a broadcast nor a user shares the specified name of the receiver, print warning
-                * otherwise send message and refresh, so it gets displayed (automatically displays 100 most recent)
-                * */
-                if (bc==null && u==null) {
-                    InfoCodes.NOT_FOUND.print(args.get(0));
-                    break;
-                }
-                else if (bc!=null && bc.getUsers().size()==0){
-                    InfoCodes.EMPTY.print(args.get(0));
-                    break;
-                } else {
-                    TextMsg msg = new TextMsg(s, bc==null ? new User(u) : bc, user, pwd, args.get(1));
-                    msg.send();
-                }
-                execute("refresh");
+                msgCase();
             }
             case "img" -> {
-                Broadcast bc = getBroadcast(args.get(0)); //select broadcast by specified receiver name from broadcast arraylist (null if it doesn't exist)
-                String u = getUser(args.get(0)); //select user by specified receiver name (null if it doesn't exist)
-                /*
-                 * if neither a broadcast nor a user shares the specified name of the receiver, print warning
-                 * otherwise send message and refresh, so it gets displayed (automatically displays 100 most recent)
-                 * */
-                if (bc==null  && u==null) { InfoCodes.NOT_FOUND.print(args.get(0)); }
-                else if (bc!=null && bc.getUsers().size()==0) {
-                    InfoCodes.EMPTY.print(args.get(0));
-                    break;
-                } else {
-                    ImageMsg msg = new ImageMsg(s, bc==null ? new User(u) : bc, user, pwd, args.get(1));
-                    msg.send();
-                }
-                execute("refresh");
+                imgCase();
             }
             case "le" -> {
-                //either get 100 most recent or all messages depending on argument and save in string array 'messages'
-                String[] messages = (args.size() != 0 && args.get(0).equals("100")) ? s.getMostRecentMessages(user, pwd) : s.getMessages(user, pwd, 0);
-                //iterate through 'messages' and print each
-                for (String message : messages) {
-                    printMsg(message);
-                }
-                //update message counter
-                lastMsg = Integer.parseInt(messages[messages.length-1].substring(0, 4));
+                leCase();
             }
             case "refresh" -> {
-                //if no messages are displayed yet, show the 100 most recent
-                if (lastMsg == 0) { execute("le 100"); }
-                //get all new and save in string array 'messages'
-                String[] messages = s.getMessages(user, pwd, lastMsg);
-                //iterate through 'messages', print each and update message counter
-                for (String message : messages) {
-                    printMsg(message);
-                    lastMsg++;
-                }
+                refreshCase();
             }
             case "labyrinth" -> {
-
+                labryinthCase();
             }
             // was dann gemacht werden soll
             //1. send msg hamster init
             //2. nachricht als string speichern
             case "exit" -> running = false;
             case "help" -> {
-                //TO-DO: add le again
-                System.out.println(ANSIColors.YELLOW.get());
-                System.out.println("Command usage and meaning:");
-                System.out.println("user [username]: set username");
-                System.out.println("pwd [password]: set password");
-                System.out.println("list: shows a list of all users in this chat");
-                System.out.println("le (100): shows all messages (optional: the 100 most recent)");
-                System.out.println("bc [name]: creates a broadcast");
-                System.out.println("bcadd [name] [username]: adds user to broadcast");
-                System.out.println("bcrem [name] [username]: removes user from broadcast");
-                System.out.println("bcdel [broadcast]: deletes broadcast");
-                System.out.println("msg [username/broadcast] [message]: sends text message to user or broadcast");
-                System.out.println("img [username/broadcast] [path_to_file]: sends an image to user or broadcast");
-                System.out.println("refresh: shows new messages");
-                System.out.println("labyrinth [usernameOfHamster]: starts interacting with the Hamster user and solves labyrinth");
-                System.out.println("exit: exits the chat");
-                System.out.println(ANSIColors.RESET.get());
+                helpCase();
             }
             default -> InfoCodes.UNKNOWN_COMMAND.print(); //print warning if command is unknown
         }
