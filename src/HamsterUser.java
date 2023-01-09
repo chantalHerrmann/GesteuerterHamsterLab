@@ -1,7 +1,11 @@
-public class HamsterUser extends Receiver {
+import de.thm.oop.chat.base.server.BasicTHMChatServer;
 
-    public HamsterUser(String name){
+public class HamsterUser extends Receiver {
+    new CommandHandler ch;
+
+    public HamsterUser(String name, BasicTHMChatServer s){
         super(name);
+        ch = new CommandHandler(s);
     }
 
     public void vor() {
